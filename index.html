@@ -7,13 +7,14 @@
   <style>
     body {
       font-family: Arial, sans-serif;
-      background-color: #f0f0f0;
+      background-color: var(--bg-color, #f0f0f0);
+      color: var(--text-color, #000);
     }
     .chat-container {
       width: 80%;
       margin: 40px auto;
       padding: 20px;
-      background-color: #fff;
+      background-color: var(--container-bg, #fff);
       border: 1px solid #ddd;
       border-radius: 10px;
       box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
@@ -23,6 +24,9 @@
       color: #fff;
       padding: 10px;
       border-bottom: 1px solid #333;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
     .chat-messages {
       padding: 20px;
@@ -37,10 +41,15 @@
     }
     .chat-message .username {
       font-weight: bold;
-      color: #333;
+      color: var(--text-color, #333);
     }
     .chat-message .message {
-      color: #666;
+      color: var(--text-color, #666);
+    }
+    .chat-message .timestamp {
+      font-size: 0.8em;
+      color: #999;
+      margin-left: 10px;
     }
     #message-input {
       width: 75%;
@@ -48,7 +57,7 @@
       border-radius: 5px;
       border: 1px solid #ccc;
     }
-    #send-button {
+    #send-button, #theme-toggle {
       padding: 10px 20px;
       margin-left: 5px;
       border-radius: 5px;
@@ -57,7 +66,7 @@
       border: none;
       cursor: pointer;
     }
-    #send-button:hover {
+    #send-button:hover, #theme-toggle:hover {
       background-color: #555;
     }
   </style>
@@ -71,7 +80,8 @@
 
   <div id="chat-container" style="display: none;" class="chat-container">
     <div class="chat-header">
-      <h2>Sala de Bate-Papo com Emojis 🙂 😊 😄 ❤ 💛 💙</h2>
+      <h2>Sala de Bate-Papo 🙂 😊 😄 ❤ 💛 💙</h2>
+      <button id="theme-toggle">🌙 Alternar Tema</button>
     </div>
     <div class="chat-messages" id="chat-messages"></div>
     <input type="text" id="message-input" placeholder="Digite sua mensagem...">
@@ -79,77 +89,110 @@
   </div>
 
   <!-- Firebase SDKs -->
-  <!-- Firebase SDKs compat (sem import, ideal para GitHub Pages) -->
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 
-<script>
-  // Sua configuração do Firebase
-  const firebaseConfig = {
-    apiKey: "AIzaSyBJQ94Ty6lurovUXe07P9ph8C30-ZdqX2g",
-    authDomain: "batepapo-7940a.firebaseapp.com",
-    databaseURL: "https://batepapo-7940a-default-rtdb.firebaseio.com",
-    projectId: "batepapo-7940a",
-    storageBucket: "batepapo-7940a.appspot.com",
-    messagingSenderId: "785173093230",
-    appId: "1:785173093230:web:df0fcdf5e4318397127f7f",
-    measurementId: "G-HBCD95MEQ8"
-  };
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBJQ94Ty6lurovUXe07P9ph8C30-ZdqX2g",
+      authDomain: "batepapo-7940a.firebaseapp.com",
+      databaseURL: "https://batepapo-7940a-default-rtdb.firebaseio.com",
+      projectId: "batepapo-7940a",
+      storageBucket: "batepapo-7940a.appspot.com",
+      messagingSenderId: "785173093230",
+      appId: "1:785173093230:web:df0fcdf5e4318397127f7f",
+      measurementId: "G-HBCD95MEQ8"
+    };
 
-  // Inicialização
-  firebase.initializeApp(firebaseConfig);
-  const db = firebase.database();
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
 
-  const usernameContainer = document.getElementById('username-container');
-  const chatContainer = document.getElementById('chat-container');
-  const usernameInput = document.getElementById('username-input');
-  const enterButton = document.getElementById('enter-button');
-  const chatMessages = document.getElementById('chat-messages');
-  const messageInput = document.getElementById('message-input');
-  const sendButton = document.getElementById('send-button');
-  let username;
+    const usernameContainer = document.getElementById('username-container');
+    const chatContainer = document.getElementById('chat-container');
+    const usernameInput = document.getElementById('username-input');
+    const enterButton = document.getElementById('enter-button');
+    const chatMessages = document.getElementById('chat-messages');
+    const messageInput = document.getElementById('message-input');
+    const sendButton = document.getElementById('send-button');
+    const themeToggle = document.getElementById('theme-toggle');
 
-  function sanitize(input) {
-    const div = document.createElement('div');
-    div.innerText = input;
-    return div.innerHTML;
-  }
+    let username, avatarEmoji;
 
-  function sendMessage() {
-    const text = messageInput.value.trim();
-    if (text !== '') {
-      db.ref("mensagens").push({
-        user: username,
-        text: text,
-        timestamp: Date.now()
-      });
-      messageInput.value = '';
+    const emojis = ['😀','😎','🧠','👻','🐱','🐶','🦊','🐵','🦄','🐸','🐯','🐼','🧙‍♂️','🧛‍♀️','👨‍🚀'];
+    const emojiMap = {
+      ':smile:': '😄', ':heart:': '❤️', ':love:': '😍', ':sun:': '☀️',
+      ':moon:': '🌙', ':star:': '⭐', ':thumbsup:': '👍', ':fire:': '🔥'
+    };
+
+    function sanitize(input) {
+      const div = document.createElement('div');
+      div.innerText = input;
+      return div.innerHTML;
     }
-  }
 
-  function renderMessage(data) {
-    const { user, text } = data.val();
-    const div = document.createElement('div');
-    div.classList.add('chat-message');
-    div.innerHTML = `<span class="username">${sanitize(user)}:</span> <span class="message">${sanitize(text)}</span>`;
-    chatMessages.appendChild(div);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-  }
-
-  enterButton.addEventListener('click', () => {
-    username = sanitize(usernameInput.value.trim());
-    if (username !== '') {
-      usernameContainer.style.display = 'none';
-      chatContainer.style.display = 'block';
-      db.ref("mensagens").limitToLast(100).on("child_added", renderMessage);
+    function parseMarkdown(text) {
+      let parsed = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      parsed = parsed.replace(/_(.*?)_/g, '<em>$1</em>');
+      for (const code in emojiMap) {
+        parsed = parsed.replaceAll(code, emojiMap[code]);
+      }
+      return parsed;
     }
-  });
 
-  sendButton.addEventListener('click', sendMessage);
-  messageInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') sendMessage();
-  });
-</script>
+    function formatTime(timestamp) {
+      const date = new Date(timestamp);
+      return `${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')}`;
+    }
 
+    function sendMessage() {
+      const text = messageInput.value.trim();
+      if (text !== '') {
+        db.ref("mensagens").push({
+          user: username,
+          emoji: avatarEmoji,
+          text: text,
+          timestamp: Date.now()
+        });
+        messageInput.value = '';
+      }
+    }
+
+    function renderMessage(data) {
+      const { user, emoji, text, timestamp } = data.val();
+      const div = document.createElement('div');
+      div.classList.add('chat-message');
+      div.innerHTML = `<span class="username">${emoji || '👤'} ${sanitize(user)}</span>:
+        <span class="message">${parseMarkdown(sanitize(text))}</span>
+        <span class="timestamp">(${formatTime(timestamp)})</span>`;
+      chatMessages.appendChild(div);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    enterButton.addEventListener('click', () => {
+      const rawName = usernameInput.value.trim();
+      if (rawName !== '') {
+        username = sanitize(rawName);
+        avatarEmoji = emojis[Math.floor(Math.random() * emojis.length)];
+        usernameContainer.style.display = 'none';
+        chatContainer.style.display = 'block';
+        db.ref("mensagens").limitToLast(100).on("child_added", renderMessage);
+      }
+    });
+
+    sendButton.addEventListener('click', sendMessage);
+    messageInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') sendMessage();
+    });
+
+    // Tema claro/escuro
+    let dark = false;
+    themeToggle.addEventListener('click', () => {
+      dark = !dark;
+      document.documentElement.style.setProperty('--bg-color', dark ? '#1e1e1e' : '#f0f0f0');
+      document.documentElement.style.setProperty('--text-color', dark ? '#f0f0f0' : '#000');
+      document.documentElement.style.setProperty('--container-bg', dark ? '#2c2c2c' : '#fff');
+      themeToggle.innerText = dark ? '☀️ Tema Claro' : '🌙 Tema Escuro';
+    });
+  </script>
 </body>
 </html>
